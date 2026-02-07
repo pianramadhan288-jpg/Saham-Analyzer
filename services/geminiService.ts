@@ -6,7 +6,16 @@ import { BROKER_MAP } from "../constants";
 // Helper untuk inisialisasi AI dengan aman
 const createAIClient = (apiKey: string) => {
   // Prioritaskan key dari parameter (User Input), fallback ke env var jika ada dan aman diakses
-  let finalKey = apiKey;
+  let finalKey = apiKey ? apiKey.trim() : "";
+  
+  // Basic sanitization: jika user paste "API_KEY AIza...", kita ambil bagian key-nya saja
+  if (finalKey.includes("AIza")) {
+    const match = finalKey.match(/(AIza[a-zA-Z0-9_\\-]+)/);
+    if (match) {
+      finalKey = match[0];
+    }
+  }
+
   if (!finalKey) {
     try {
       // Cek aman untuk process.env agar tidak crash di browser
@@ -821,12 +830,12 @@ export const analyzeStock = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.1, // Slight temp for persona flavor
-        thinkingConfig: { thinkingBudget: 0 },
+        // thinkingConfig: { thinkingBudget: 0 }, // REMOVED: 2.0 Flash might not support this directly
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -848,9 +857,11 @@ export const analyzeStock = async (
 
     const result = JSON.parse(response.text || '{}');
     return result as AnalysisResult;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
-    throw new Error(`Gagal melakukan analisa ${mode}. Cek data raw atau API key.`);
+    // Tampilkan pesan error detail jika ada
+    const msg = error.message || error.toString();
+    throw new Error(`Gagal melakukan analisa ${mode}. Detail: ${msg}. Cek kuota API atau koneksi.`);
   }
 };
 
@@ -875,8 +886,9 @@ export const analyzeAllModes = async (
       [AIMode.SWING]: swing,
       [AIMode.INVESTASI]: investasi
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Multi-mode Analysis Error:", error);
-    throw new Error("Gagal menjalankan Quantum Mode (Analisa Gabungan).");
+    const msg = error.message || error.toString();
+    throw new Error(`Gagal menjalankan Quantum Mode. Detail: ${msg}`);
   }
 };
