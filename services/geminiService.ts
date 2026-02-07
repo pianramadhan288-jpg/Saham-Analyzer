@@ -3,7 +3,27 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIMode, AIPersona, AnalysisResult } from "../types";
 import { BROKER_MAP } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Helper untuk inisialisasi AI dengan aman
+const createAIClient = (apiKey: string) => {
+  // Prioritaskan key dari parameter (User Input), fallback ke env var jika ada dan aman diakses
+  let finalKey = apiKey;
+  if (!finalKey) {
+    try {
+      // Cek aman untuk process.env agar tidak crash di browser
+      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+        finalKey = process.env.API_KEY;
+      }
+    } catch (e) {
+      // Ignore error jika process tidak didefinisikan
+    }
+  }
+
+  if (!finalKey) {
+    throw new Error("API Key tidak ditemukan. Harap masukkan Key yang valid saat Login.");
+  }
+  
+  return new GoogleGenAI({ apiKey: finalKey });
+};
 
 const getSystemInstruction = (mode: AIMode, persona: AIPersona, modal: number, brokerContext: string) => {
   
@@ -593,7 +613,7 @@ STRICT LANGUAGE & LOGIC RULE
 - SETIAP kesimpulan WAJIB disertai PROBABILITAS (%)
 - GUNAKAN HANYA DATA FUNDAMENTAL YANG DIBERIKAN USER
 - JIKA DATA TIDAK TERSEDIA → TULIS TEPAT: DATA TIDAK TERSEDIA
-- DATA ADA TAPI TIDAK DIGUNAKAN → ANALISA INVALID
+- DATA ADA TAPI TIDAK DIGUNAKAN -> ANALISA INVALID
 
 ==================================================
 ABSOLUTE PROHIBITION
@@ -610,7 +630,7 @@ DILARANG MENYEBUT ATAU MENGGUNAKAN:
 ==================================================
 CORE PRINCIPLE
 ==================================================
-INVESTASI ≠ HOLD FOREVER
+INVESTASI != HOLD FOREVER
 INVESTASI = UNDERWRITE BUSINESS + PROTECT CAPITAL
 
 ==================================================
@@ -746,7 +766,6 @@ DATA ONLY
   if (mode === AIMode.SCALPING) selectedModeRules = scalpingRules;
   if (mode === AIMode.SWING) selectedModeRules = swingRules;
   if (mode === AIMode.INVESTASI) selectedModeRules = investmentRules;
-  // Note: ALL mode should not reach here directly via analyzeStock
 
   const commonFooter = `
 =====================================================================
@@ -783,8 +802,11 @@ export const analyzeStock = async (
   emiten: string,
   modal: number,
   rawData: string,
-  persona: AIPersona = AIPersona.INSTITUSI
+  persona: AIPersona = AIPersona.INSTITUSI,
+  apiKey: string = ''
 ): Promise<AnalysisResult> => {
+  const ai = createAIClient(apiKey);
+  
   const brokerContext = Object.values(BROKER_MAP)
     .map(b => `${b.code}: ${b.type} (${b.desc})`)
     .join(', ');
@@ -837,14 +859,15 @@ export const analyzeAllModes = async (
   emiten: string,
   modal: number,
   rawData: string,
-  persona: AIPersona = AIPersona.INSTITUSI
+  persona: AIPersona = AIPersona.INSTITUSI,
+  apiKey: string = ''
 ): Promise<Record<string, AnalysisResult>> => {
   try {
     // Execute all 3 strategies in parallel
     const [scalping, swing, investasi] = await Promise.all([
-      analyzeStock(AIMode.SCALPING, emiten, modal, rawData, persona),
-      analyzeStock(AIMode.SWING, emiten, modal, rawData, persona),
-      analyzeStock(AIMode.INVESTASI, emiten, modal, rawData, persona)
+      analyzeStock(AIMode.SCALPING, emiten, modal, rawData, persona, apiKey),
+      analyzeStock(AIMode.SWING, emiten, modal, rawData, persona, apiKey),
+      analyzeStock(AIMode.INVESTASI, emiten, modal, rawData, persona, apiKey)
     ]);
 
     return {
