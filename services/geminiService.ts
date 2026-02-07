@@ -3,24 +3,37 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIMode, AIPersona, AnalysisResult } from "../types";
 import { BROKER_MAP } from "../constants";
 
+// Helper untuk membersihkan dan validasi API Key
+export const sanitizeApiKey = (rawKey: string): string => {
+  if (!rawKey) return "";
+  
+  // 1. Coba cari pattern AIza yang spesifik (AIza + 35 chars = 39 chars total biasanya)
+  // Regex: AIza diikuti karakter valid Base64URL
+  const match = rawKey.match(/(AIza[0-9A-Za-z\-_]{35})/);
+  if (match) {
+    return match[0];
+  }
+
+  // 2. Jika tidak ketemu pattern 39 chars, coba cari AIza sampai spasi/akhir
+  const looseMatch = rawKey.match(/(AIza[0-9A-Za-z\-_]+)/);
+  if (looseMatch) {
+    return looseMatch[0];
+  }
+
+  // 3. Fallback: return trimmed string
+  return rawKey.trim();
+};
+
 // Helper untuk inisialisasi AI dengan aman
 const createAIClient = (apiKey: string) => {
-  // Prioritaskan key dari parameter (User Input), fallback ke env var jika ada dan aman diakses
-  let finalKey = apiKey ? apiKey.trim() : "";
-  
-  // Basic sanitization: jika user paste "API_KEY AIza...", kita ambil bagian key-nya saja
-  if (finalKey.includes("AIza")) {
-    const match = finalKey.match(/(AIza[a-zA-Z0-9_\\-]+)/);
-    if (match) {
-      finalKey = match[0];
-    }
-  }
+  // Prioritaskan key dari parameter (User Input)
+  let finalKey = sanitizeApiKey(apiKey);
 
   if (!finalKey) {
     try {
       // Cek aman untuk process.env agar tidak crash di browser
       if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-        finalKey = process.env.API_KEY;
+        finalKey = sanitizeApiKey(process.env.API_KEY);
       }
     } catch (e) {
       // Ignore error jika process tidak didefinisikan
@@ -28,8 +41,11 @@ const createAIClient = (apiKey: string) => {
   }
 
   if (!finalKey) {
-    throw new Error("API Key tidak ditemukan. Harap masukkan Key yang valid saat Login.");
+    throw new Error("API Key kosong. Silakan login ulang dengan key yang valid.");
   }
+  
+  // Debug log (aman, hanya 5 char terakhir)
+  // console.log("Initializing Gemini with Key ending in: ..." + finalKey.slice(-5));
   
   return new GoogleGenAI({ apiKey: finalKey });
 };
@@ -835,7 +851,6 @@ export const analyzeStock = async (
       config: {
         systemInstruction: systemPrompt,
         temperature: 0.1, // Slight temp for persona flavor
-        // thinkingConfig: { thinkingBudget: 0 }, // REMOVED: 2.0 Flash might not support this directly
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -861,7 +876,7 @@ export const analyzeStock = async (
     console.error("Gemini Analysis Error:", error);
     // Tampilkan pesan error detail jika ada
     const msg = error.message || error.toString();
-    throw new Error(`Gagal melakukan analisa ${mode}. Detail: ${msg}. Cek kuota API atau koneksi.`);
+    throw new Error(`Gagal melakukan analisa ${mode}. Detail: ${msg}.`);
   }
 };
 
