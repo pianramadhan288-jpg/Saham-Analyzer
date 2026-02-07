@@ -112,6 +112,12 @@ const App: React.FC = () => {
       return;
     }
 
+    // Pastikan Key ada
+    if (!userKey) {
+      setError("Sesi kadaluarsa. Silakan login kembali.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -120,13 +126,13 @@ const App: React.FC = () => {
     try {
       if (mode === AIMode.ALL) {
         // Run all modes
-        const results = await analyzeAllModes(emiten.toUpperCase(), Number(modal), rawData, persona);
+        const results = await analyzeAllModes(emiten.toUpperCase(), Number(modal), rawData, persona, userKey);
         setMultiResult(results);
         // Default to showing Scalping first
         setActiveSubMode(AIMode.SCALPING);
       } else {
         // Run single mode
-        const analysis = await analyzeStock(mode, emiten.toUpperCase(), Number(modal), rawData, persona);
+        const analysis = await analyzeStock(mode, emiten.toUpperCase(), Number(modal), rawData, persona, userKey);
         setResult(analysis);
       }
 
@@ -134,7 +140,7 @@ const App: React.FC = () => {
         document.getElementById('result-section')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan sistem.');
+      setError(err.message || 'Terjadi kesalahan sistem. Cek API Key atau Data.');
     } finally {
       setLoading(false);
     }
